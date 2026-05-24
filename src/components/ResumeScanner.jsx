@@ -8,6 +8,14 @@ import {
 import { extractTextFromPDF } from '../utils/pdfParser';
 import { analyzeResume, JOB_CATEGORIES } from '../utils/atsEngine';
 
+const BREAKDOWN_ITEMS = [
+  { label: 'Keywords Fit (30%)', key: 'keywords', color: 'var(--primary)' },
+  { label: 'Formatting & Length (20%)', key: 'formatting', color: 'var(--secondary)' },
+  { label: 'Section Coverage (20%)', key: 'structure', color: 'var(--accent)' },
+  { label: 'Impact & Action Verbs (20%)', key: 'impactVerbs', color: 'var(--warning)' },
+  { label: 'Contact Presence (10%)', key: 'contact', color: '#06b6d4' }
+];
+
 function ResumeScanner({ setActiveTab }) {
   const [selectedCategory, setSelectedCategory] = useState('web_developer');
   const [file, setFile] = useState(null);
@@ -78,10 +86,10 @@ function ResumeScanner({ setActiveTab }) {
       );
 
       // 3. Category bars loading
-      barRefs.current.forEach((bar, idx) => {
+      BREAKDOWN_ITEMS.forEach((item, idx) => {
+        const bar = barRefs.current[idx];
         if (!bar) return;
-        const key = Object.keys(result.breakdown)[idx];
-        const val = result.breakdown[key];
+        const val = result.breakdown[item.key];
         gsap.fromTo(bar,
           { width: '0%' },
           { width: `${val}%`, duration: 1.2, ease: 'power2.out', delay: 0.2 + idx * 0.1 }
@@ -378,13 +386,7 @@ function ResumeScanner({ setActiveTab }) {
 
               {/* Progress Breakdown Bars */}
               <div className="breakdown-grid">
-                {[
-                  { label: 'Keywords Fit (30%)', key: 'keywords', color: 'var(--primary)' },
-                  { label: 'Formatting & Length (20%)', key: 'formatting', color: 'var(--secondary)' },
-                  { label: 'Section Coverage (20%)', key: 'structure', color: 'var(--accent)' },
-                  { label: 'Impact & Action Verbs (20%)', key: 'impactVerbs', color: 'var(--warning)' },
-                  { label: 'Contact Presence (10%)', key: 'contact', color: '#06b6d4' }
-                ].map((item, index) => (
+                {BREAKDOWN_ITEMS.map((item, index) => (
                   <div key={item.key} className="breakdown-item">
                     <div className="breakdown-labels">
                       <span className="b-label">{item.label}</span>
