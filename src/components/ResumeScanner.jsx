@@ -3,11 +3,10 @@ import { gsap } from 'gsap';
 import confetti from 'canvas-confetti';
 import { 
   UploadCloud, FileText, CheckCircle2, AlertTriangle, XCircle, 
-  ArrowRight, Sparkles, RotateCcw, Info, Briefcase, ChevronRight, Check, Settings
+  ArrowRight, Sparkles, RotateCcw, Info, Briefcase, ChevronRight, Check
 } from 'lucide-react';
 import { extractTextFromPDF } from '../utils/pdfParser';
 import { analyzeResume, JOB_CATEGORIES } from '../utils/atsEngine';
-import { analyzeResumeWithGemini } from '../utils/geminiEngine';
 
 const BREAKDOWN_ITEMS = [
   { label: 'Keywords Fit (30%)', key: 'keywords', color: 'var(--primary)' },
@@ -27,12 +26,6 @@ function ResumeScanner({ setActiveTab }) {
   const [isDragOver, setIsDragOver] = useState(false);
   const [displayScore, setDisplayScore] = useState(0);
   const [activeResultsTab, setActiveResultsTab] = useState('issues');
-  
-  // Gemini API states
-  const [apiKey, setApiKey] = useState(localStorage.getItem('gemini_api_key') || '');
-  const [showSettings, setShowSettings] = useState(false);
-  const [analysisSource, setAnalysisSource] = useState('local'); // 'gemini' | 'local'
-  const [apiStatusMessage, setApiStatusMessage] = useState('');
 
   // GSAP animation refs
   const containerRef = useRef(null);
@@ -152,8 +145,6 @@ function ResumeScanner({ setActiveTab }) {
   const runAnalysis = async () => {
     setError('');
     setResult(null);
-    setApiStatusMessage('');
-    setAnalysisSource('local');
 
     let textToAnalyze = pasteText.trim();
 
@@ -174,40 +165,9 @@ function ResumeScanner({ setActiveTab }) {
       return;
     }
 
-    const category = JOB_CATEGORIES[selectedCategory] || JOB_CATEGORIES.fresher_developer;
-
-    if (apiKey.trim()) {
-      setIsParsing(true);
-      try {
-        const geminiResult = await analyzeResumeWithGemini(textToAnalyze, category.label, apiKey.trim());
-        setResult(geminiResult);
-        setAnalysisSource('gemini');
-        setApiStatusMessage('Scored using Google Gemini 1.5 Flash.');
-      } catch (err) {
-        console.error('Gemini API Error:', err);
-        let statusMsg = '';
-        if (err.message === 'API_RATE_LIMIT') {
-          statusMsg = 'Gemini API free tier rate limit reached. Fell back to local scoring rules.';
-        } else if (err.message === 'API_KEY_MISSING') {
-          statusMsg = 'Gemini API key is missing. Fell back to local scoring rules.';
-        } else {
-          statusMsg = `Gemini API error (${err.message}). Fell back to local scoring rules.`;
-        }
-        
-        // Fallback to local
-        const localResult = analyzeResume(textToAnalyze, selectedCategory);
-        setResult(localResult);
-        setAnalysisSource('local');
-        setApiStatusMessage(statusMsg);
-      }
-      setIsParsing(false);
-    } else {
-      // Direct local analysis
-      const localResult = analyzeResume(textToAnalyze, selectedCategory);
-      setResult(localResult);
-      setAnalysisSource('local');
-      setApiStatusMessage('Scored using local ATS rules engine. Add a Gemini API key for AI-powered evaluation.');
-    }
+    // Run custom rule grading engine
+    const analysisReport = analyzeResume(textToAnalyze, selectedCategory);
+    setResult(analysisReport);
     setActiveResultsTab('issues'); // Default tab
   };
 
@@ -217,8 +177,6 @@ function ResumeScanner({ setActiveTab }) {
     setResult(null);
     setError('');
     setDisplayScore(0);
-    setApiStatusMessage('');
-    setAnalysisSource('local');
   };
 
   return (
@@ -228,54 +186,7 @@ function ResumeScanner({ setActiveTab }) {
         <span className="badge-glow"><Sparkles size={14} /> Phase 2 Active</span>
         <h1 className="gradient-text">ATS Grading & Parser</h1>
         <p>Upload a PDF resume or copy-paste text to receive immediate structural score analysis and targeted keywords optimization checks.</p>
-        <button 
-          className={`btn-secondary btn-settings-toggle ${apiKey ? 'configured' : ''}`}
-          onClick={() => setShowSettings(!showSettings)}
-        >
-          <Settings size={16} /> {apiKey ? 'Gemini AI Configured' : 'Configure Gemini AI (Free)'}
-        </button>
       </div>
-
-      {/* API Settings Collapsible Card */}
-      {showSettings && (
-        <div className="glass-panel api-settings-panel animate-fade">
-          <div className="settings-header">
-            <h3 className="settings-title"><Settings size={18} /> Gemini AI Configuration</h3>
-            <button className="btn-close-settings" onClick={() => setShowSettings(false)}>×</button>
-          </div>
-          <p className="settings-desc">
-            Enter your Google Gemini API key to run a highly accurate, AI-powered evaluation checking grammar, writing style, formatting mistakes, and custom keyword density. You can get a free key from the <a href="https://aistudio.google.com/" target="_blank" rel="noopener noreferrer">Google AI Studio</a>.
-          </p>
-          <div className="key-input-row">
-            <input 
-              type="password" 
-              placeholder="Paste Google Gemini API Key here (starts with AIzaSy...)" 
-              value={apiKey} 
-              onChange={(e) => {
-                setApiKey(e.target.value);
-                localStorage.setItem('gemini_api_key', e.target.value);
-              }} 
-              className="api-key-input"
-            />
-            {apiKey && (
-              <button className="btn-secondary btn-clear-key" onClick={() => {
-                setApiKey('');
-                localStorage.removeItem('gemini_api_key');
-              }}>Clear Key</button>
-            )}
-          </div>
-          <div className="limits-info">
-            <div className="limit-bullet">
-              <span className="limit-tag">Gemini Free Rate Limit:</span>
-              <span>15 requests per minute, 1,500 requests per day. Completely free.</span>
-            </div>
-            <div className="limit-bullet">
-              <span className="limit-tag">Fallback protection:</span>
-              <span>If rate limit is reached, or key is blank/invalid, the app instantly falls back to the local rules engine with full details.</span>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div className="scanner-grid">
         {/* Left Side: Upload / Paste Input Panel */}
@@ -414,17 +325,6 @@ function ResumeScanner({ setActiveTab }) {
           ) : (
             /* Fully Populated ATS Grading Dashboard */
             <div className="results-container">
-              {/* API Mode Indicator Banner */}
-              {apiStatusMessage && (
-                <div className={`analysis-source-indicator ${analysisSource === 'gemini' ? 'ai-mode' : 'local-mode'}`}>
-                  {analysisSource === 'gemini' ? (
-                    <Sparkles size={16} className="indicator-icon sparkle-ai" />
-                  ) : (
-                    <Info size={16} className="indicator-icon" />
-                  )}
-                  <span>{apiStatusMessage}</span>
-                </div>
-              )}
               
               {/* Circular Score Gauge & Global Stats */}
               <div className="results-top-row">
@@ -1467,195 +1367,6 @@ function ResumeScanner({ setActiveTab }) {
         }
 
         .mt-8 { margin-top: 8px; }
-
-        .btn-settings-toggle {
-          margin-top: 14px;
-          padding: 8px 18px;
-          font-size: 13.5px;
-          border-radius: 10px;
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          border-color: rgba(255,255,255,0.08);
-          background: rgba(255,255,255,0.03);
-          transition: all 0.25s ease;
-        }
-
-        .btn-settings-toggle:hover {
-          background: rgba(255,255,255,0.08);
-          border-color: var(--secondary-glow);
-          box-shadow: 0 0 12px rgba(99,102,241,0.2);
-        }
-
-        .btn-settings-toggle.configured {
-          border-color: var(--primary-glow);
-          color: var(--primary);
-          background: rgba(16,185,129,0.05);
-        }
-
-        .btn-settings-toggle.configured:hover {
-          background: rgba(16,185,129,0.1);
-          box-shadow: 0 0 12px var(--primary-glow);
-        }
-
-        /* Collapsible Settings Panel */
-        .api-settings-panel {
-          padding: 24px;
-          background: rgba(12, 17, 34, 0.8);
-          border: 1px solid rgba(99, 102, 241, 0.25);
-          box-shadow: 0 8px 32px 0 rgba(99, 102, 241, 0.08);
-          max-width: 1300px;
-          width: 100%;
-          margin: -10px auto 0 auto;
-          display: flex;
-          flex-direction: column;
-          gap: 14px;
-        }
-
-        .settings-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          width: 100%;
-        }
-
-        .settings-title {
-          font-size: 18px;
-          font-weight: 700;
-          color: white;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin: 0;
-        }
-
-        .btn-close-settings {
-          background: none;
-          border: none;
-          color: var(--text-secondary);
-          font-size: 24px;
-          cursor: pointer;
-          transition: color 0.2s;
-          line-height: 1;
-        }
-
-        .btn-close-settings:hover {
-          color: var(--danger);
-        }
-
-        .settings-desc {
-          font-size: 13.5px;
-          color: var(--text-secondary);
-          line-height: 1.5;
-          margin: 0;
-        }
-
-        .settings-desc a {
-          color: var(--secondary);
-          text-decoration: none;
-          font-weight: 600;
-          transition: text-decoration 0.2s;
-        }
-
-        .settings-desc a:hover {
-          text-decoration: underline;
-        }
-
-        .key-input-row {
-          display: flex;
-          gap: 12px;
-          width: 100%;
-        }
-
-        .api-key-input {
-          flex: 1;
-          background: rgba(255,255,255,0.02);
-          border: 1px solid var(--border-color);
-          border-radius: 10px;
-          padding: 10px 14px;
-          color: white;
-          font-family: var(--font-mono);
-          font-size: 13px;
-          outline: none;
-          transition: border-color 0.2s;
-        }
-
-        .api-key-input:focus {
-          border-color: var(--secondary);
-        }
-
-        .btn-clear-key {
-          padding: 10px 18px;
-          font-size: 13px;
-          border-radius: 10px;
-        }
-
-        .btn-clear-key:hover {
-          background: rgba(239, 68, 68, 0.1);
-          color: #ef4444;
-          border-color: rgba(239, 68, 68, 0.25);
-        }
-
-        .limits-info {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-          font-size: 12px;
-          color: var(--text-muted);
-          border-top: 1px solid rgba(255,255,255,0.04);
-          padding-top: 12px;
-        }
-
-        .limit-bullet {
-          display: flex;
-          gap: 6px;
-        }
-
-        .limit-tag {
-          font-weight: 700;
-          color: var(--text-secondary);
-          flex-shrink: 0;
-        }
-
-        /* API Mode Indicator Banner */
-        .analysis-source-indicator {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          padding: 12px 16px;
-          border-radius: 10px;
-          font-size: 13px;
-          font-weight: 550;
-          line-height: 1.4;
-          margin-bottom: 8px;
-        }
-
-        .analysis-source-indicator.ai-mode {
-          background: rgba(168, 85, 247, 0.06);
-          border: 1px solid rgba(168, 85, 247, 0.2);
-          color: #d8b4fe;
-        }
-
-        .analysis-source-indicator.local-mode {
-          background: rgba(245, 158, 11, 0.05);
-          border: 1px solid rgba(245, 158, 11, 0.15);
-          color: #fde047;
-        }
-
-        .indicator-icon {
-          flex-shrink: 0;
-        }
-
-        .sparkle-ai {
-          color: #c084fc;
-          animation: rotateGlow 3s infinite linear;
-        }
-
-        @keyframes rotateGlow {
-          0% { transform: scale(1); filter: drop-shadow(0 0 1px #a855f7); }
-          50% { transform: scale(1.1); filter: drop-shadow(0 0 4px #a855f7); }
-          100% { transform: scale(1); filter: drop-shadow(0 0 1px #a855f7); }
-        }
 
         /* Animation utilities */
         .animate-fade {
