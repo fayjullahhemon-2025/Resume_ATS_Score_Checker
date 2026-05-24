@@ -74,6 +74,12 @@ const WEAK_PHRASES = [
 ];
 
 /**
+ * Escapes special regex characters in a string so it can be safely used in a RegExp.
+ * e.g. "c++" -> "c\\+\\+", "node.js" -> "node\.js"
+ */
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
  * Analyzes resume plain text against standard ATS guidelines and target job category.
  * @param {string} text - Resume plain text
  * @param {string} categoryKey - Selected job category key from JOB_CATEGORIES
@@ -97,13 +103,12 @@ export const analyzeResume = (text, categoryKey) => {
   // 1. STRUCTURE ANALYSIS (Max 20 points, 4 points per section found)
   const sectionsFound = {};
   Object.entries(SECTION_HEADERS).forEach(([section, keywords]) => {
-    // Check if any keyword matches as a line starting or block heading
     const found = keywords.some(kw => {
-      // Check if it appears in the text as a standalone phrase or heading
-      const regex = new RegExp(`(^|\\n|\\r)\\s*${kw}\\s*(\\n|\\r|$)`, 'i');
+      // Escape the keyword and match as a near-standalone heading on its own line
+      const escaped = escapeRegex(kw);
+      const regex = new RegExp(`(^|\\n|\\r)\\s*${escaped}\\s*(\\n|\\r|$)`, 'i');
       return regex.test(text);
     });
-    
     sectionsFound[section] = found;
     if (found) {
       structureScore += 4;
@@ -150,8 +155,21 @@ export const analyzeResume = (text, categoryKey) => {
   const missingKeywords = [];
 
   category.keywords.forEach(kw => {
-    // Simple keyword matching with word boundary
-    const regex = new RegExp(`\\b${kw}\\b`, 'i');
+    // Escape special regex characters (e.g. c++, node.js, r language)
+    const escaped = escapeRegex(kw);
+    // For multi-word keywords use a simple includes check; for single words use word boundary
+    const isMultiWord = kw.includes(' ');
+    let regex;
+    if (isMultiWord) {
+      regex = new RegExp(escaped, 'i');
+    } else {
+      // Use word boundary but fall back gracefully for symbols like c++
+      try {
+        regex = new RegExp(`\\b${escaped}\\b`, 'i');
+      } catch {
+        regex = new RegExp(escaped, 'i');
+      }
+    }
     if (regex.test(text)) {
       matchedKeywords.push(kw);
     } else {
