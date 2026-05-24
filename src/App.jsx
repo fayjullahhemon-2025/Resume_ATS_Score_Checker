@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { gsap } from 'gsap';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
+import ResumeScanner from './components/ResumeScanner';
 import Preloader from './components/Preloader';
 import PageTransition from './components/PageTransition';
 import './index.css';
@@ -9,7 +10,7 @@ import './index.css';
 // Page tab metadata
 const PAGES = {
   home: () => import('./components/HeroSection'),
-  scan: null,
+  scan: () => import('./components/ResumeScanner'),
   latex: null,
   career: null,
 };
@@ -112,21 +113,7 @@ function App() {
           )}
 
           {activeTab === 'scan' && (
-            <div className="coming-soon-page">
-              <div className="glass-panel coming-soon-card">
-                <div className="cs-icon-box">
-                  <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-                    <rect x="4" y="4" width="48" height="48" rx="14" fill="rgba(16,185,129,0.08)" stroke="rgba(16,185,129,0.25)" strokeWidth="1.5"/>
-                    <path d="M18 28h20M18 22h20M18 34h12" stroke="#10b981" strokeWidth="2" strokeLinecap="round"/>
-                    <circle cx="42" cy="42" r="8" fill="rgba(99,102,241,0.15)" stroke="rgba(99,102,241,0.5)" strokeWidth="1.5"/>
-                    <path d="M39 42l2 2 4-4" stroke="#6366f1" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                </div>
-                <h2 className="gradient-text">ATS Checker</h2>
-                <p>The AI-powered resume scanner is coming in <strong>Phase 2</strong>. It will parse your PDF, analyze keywords, and return a full ATS score report.</p>
-                <button className="btn-secondary" onClick={() => handleTabChange('home')}>← Back to Home</button>
-              </div>
-            </div>
+            <ResumeScanner setActiveTab={handleTabChange} />
           )}
 
           {activeTab === 'latex' && (
