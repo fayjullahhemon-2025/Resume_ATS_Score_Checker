@@ -1015,24 +1015,26 @@ function ResumeScanner({ setActiveTab }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          flex-direction: row;
+          flex-direction: column;
+          line-height: 1.1;
         }
 
         .score-num {
-          font-size: 38px;
+          font-size: 42px;
           font-weight: 800;
           color: var(--text-primary);
           font-family: var(--font-sans);
           letter-spacing: -1px;
+          line-height: 1;
         }
 
         .score-max {
-          font-size: 15px;
+          font-size: 13px;
           color: var(--text-muted);
-          margin-left: 2px;
-          font-weight: 500;
-          align-self: flex-end;
-          margin-bottom: 8px;
+          font-weight: 600;
+          letter-spacing: 0.5px;
+          margin-top: 2px;
+          line-height: 1;
         }
 
         .report-brief {
