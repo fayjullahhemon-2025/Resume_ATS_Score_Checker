@@ -3,6 +3,7 @@ import { gsap } from 'gsap';
 import Navbar from './components/Navbar';
 import HeroSection from './components/HeroSection';
 import ResumeScanner from './components/ResumeScanner';
+import LaTeXBuilder from './components/LaTeXBuilder';
 import Preloader from './components/Preloader';
 import PageTransition from './components/PageTransition';
 import './index.css';
@@ -11,7 +12,7 @@ import './index.css';
 const PAGES = {
   home: () => import('./components/HeroSection'),
   scan: () => import('./components/ResumeScanner'),
-  latex: null,
+  latex: () => import('./components/LaTeXBuilder'),
   career: null,
 };
 
@@ -20,6 +21,11 @@ function App() {
   const [displayedTab, setDisplayedTab] = useState('home');
   const [isLoaded, setIsLoaded] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
+  
+  // Persisted state across tab switches
+  const [scanResult, setScanResult] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('web_developer');
+
   const mainRef = useRef(null);
   const progressBarRef = useRef(null);
 
@@ -113,25 +119,21 @@ function App() {
           )}
 
           {activeTab === 'scan' && (
-            <ResumeScanner setActiveTab={handleTabChange} />
+            <ResumeScanner 
+              setActiveTab={handleTabChange} 
+              scanResult={scanResult}
+              setScanResult={setScanResult}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+            />
           )}
 
           {activeTab === 'latex' && (
-            <div className="coming-soon-page">
-              <div className="glass-panel coming-soon-card">
-                <div className="cs-icon-box">
-                  <svg width="56" height="56" viewBox="0 0 56 56" fill="none">
-                    <rect x="4" y="4" width="48" height="48" rx="14" fill="rgba(168,85,247,0.08)" stroke="rgba(168,85,247,0.25)" strokeWidth="1.5"/>
-                    <path d="M16 38l8-20 8 20M20 30h8" stroke="#a855f7" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                    <path d="M36 20c2 0 4 1 4 4s-2 4-4 4" stroke="#a855f7" strokeWidth="2" strokeLinecap="round"/>
-                    <path d="M36 28l4 10" stroke="#a855f7" strokeWidth="2" strokeLinecap="round"/>
-                  </svg>
-                </div>
-                <h2 style={{background:'linear-gradient(135deg,#fff 40%,#a855f7 100%)', WebkitBackgroundClip:'text', WebkitTextFillColor:'transparent'}}>LaTeX Builder</h2>
-                <p>The live Overleaf-compatible template generator arrives in <strong>Phase 4</strong>. Edit fields and watch your ATS-clean LaTeX update in real-time.</p>
-                <button className="btn-secondary" onClick={() => handleTabChange('home')}>← Back to Home</button>
-              </div>
-            </div>
+            <LaTeXBuilder 
+              scanResult={scanResult} 
+              selectedCategory={selectedCategory} 
+              setActiveTab={handleTabChange}
+            />
           )}
 
           {activeTab === 'career' && (

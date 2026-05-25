@@ -16,13 +16,17 @@ const BREAKDOWN_ITEMS = [
   { label: 'Contact Presence (10%)', key: 'contact', color: '#06b6d4' }
 ];
 
-function ResumeScanner({ setActiveTab }) {
-  const [selectedCategory, setSelectedCategory] = useState('web_developer');
+function ResumeScanner({ 
+  setActiveTab, 
+  scanResult, 
+  setScanResult, 
+  selectedCategory, 
+  setSelectedCategory 
+}) {
   const [file, setFile] = useState(null);
   const [pasteText, setPasteText] = useState('');
   const [isParsing, setIsParsing] = useState(false);
   const [error, setError] = useState('');
-  const [result, setResult] = useState(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [displayScore, setDisplayScore] = useState(0);
   const [activeResultsTab, setActiveResultsTab] = useState('issues');
@@ -52,10 +56,10 @@ function ResumeScanner({ setActiveTab }) {
 
   // Animate score details when a new result comes in
   useEffect(() => {
-    if (!result) return;
+    if (!scanResult) return;
 
     // Trigger confetti on high scores
-    if (result.total >= 80) {
+    if (scanResult.total >= 80) {
       confetti({
         particleCount: 80,
         spread: 70,
@@ -68,7 +72,7 @@ function ResumeScanner({ setActiveTab }) {
       // 1. Score number counting up
       scoreValRef.current = { val: 0 };
       gsap.to(scoreValRef.current, {
-        val: result.total,
+        val: scanResult.total,
         duration: 1.6,
         ease: 'power3.out',
         onUpdate: () => {
@@ -79,7 +83,7 @@ function ResumeScanner({ setActiveTab }) {
       // 2. SVG circle stroke offset animation
       // Circumference = 2 * PI * r = 2 * 3.14159 * 42 = 263.89
       const circ = 263.89;
-      const targetOffset = circ - (circ * result.total) / 100;
+      const targetOffset = circ - (circ * scanResult.total) / 100;
       gsap.fromTo(circleProgressRef.current,
         { strokeDashoffset: circ },
         { strokeDashoffset: targetOffset, duration: 1.6, ease: 'power3.out' }
@@ -89,7 +93,7 @@ function ResumeScanner({ setActiveTab }) {
       BREAKDOWN_ITEMS.forEach((item, idx) => {
         const bar = barRefs.current[idx];
         if (!bar) return;
-        const val = result.breakdown[item.key];
+        const val = scanResult.breakdown[item.key];
         gsap.fromTo(bar,
           { width: '0%' },
           { width: `${val}%`, duration: 1.2, ease: 'power2.out', delay: 0.2 + idx * 0.1 }
@@ -98,7 +102,7 @@ function ResumeScanner({ setActiveTab }) {
     }, containerRef);
 
     return () => ctx.revert();
-  }, [result]);
+  }, [scanResult]);
 
   // Handle PDF file drop
   const handleDragOver = (e) => {
@@ -144,7 +148,7 @@ function ResumeScanner({ setActiveTab }) {
   // Trigger main analysis
   const runAnalysis = async () => {
     setError('');
-    setResult(null);
+    setScanResult(null);
 
     let textToAnalyze = pasteText.trim();
 
@@ -167,14 +171,14 @@ function ResumeScanner({ setActiveTab }) {
 
     // Run custom rule grading engine
     const analysisReport = analyzeResume(textToAnalyze, selectedCategory);
-    setResult(analysisReport);
+    setScanResult(analysisReport);
     setActiveResultsTab('issues'); // Default tab
   };
 
   const resetScanner = () => {
     setFile(null);
     setPasteText('');
-    setResult(null);
+    setScanResult(null);
     setError('');
     setDisplayScore(0);
   };
@@ -183,7 +187,7 @@ function ResumeScanner({ setActiveTab }) {
     <div className="scanner-container" ref={containerRef}>
       {/* Page Header */}
       <div className="scanner-header">
-        <span className="badge-glow"><Sparkles size={14} /> Phase 2 Active</span>
+        <span className="badge-glow"><Sparkles size={14} /> Phase 2 ✓ Complete</span>
         <h1 className="gradient-text">ATS Grading & Parser</h1>
         <p>Upload a PDF resume or copy-paste text to receive immediate structural score analysis and targeted keywords optimization checks.</p>
       </div>
@@ -296,7 +300,7 @@ function ResumeScanner({ setActiveTab }) {
               )}
             </button>
 
-            {(file || pasteText.trim() || result) && (
+            {(file || pasteText.trim() || scanResult) && (
               <button className="btn-secondary btn-reset" onClick={resetScanner} title="Reset All">
                 <RotateCcw size={18} />
               </button>
@@ -306,7 +310,7 @@ function ResumeScanner({ setActiveTab }) {
 
         {/* Right Side: Score Gauge & Breakdown Dashboard */}
         <div className="glass-panel scanner-right" ref={rightPanelRef}>
-          {!result ? (
+          {!scanResult ? (
             /* Analysis Placeholder Dashboard */
             <div className="placeholder-dashboard">
               <div className="futuristic-scanner">
@@ -357,12 +361,12 @@ function ResumeScanner({ setActiveTab }) {
                 <div className="report-brief">
                   <span className="brief-title">ATS Verdict</span>
                   <h2 className="brief-grade">
-                    {result.total >= 80 ? 'Highly Optimised' : result.total >= 60 ? 'Moderate Fit' : 'Needs Improvement'}
+                    {scanResult.total >= 80 ? 'Highly Optimised' : scanResult.total >= 60 ? 'Moderate Fit' : 'Needs Improvement'}
                   </h2>
                   <p className="brief-desc">
-                    {result.total >= 80 
+                    {scanResult.total >= 80 
                       ? 'Your resume shows strong section labeling, robust industry keywords coverage, and quantifiable impact ratios.'
-                      : result.total >= 60 
+                      : scanResult.total >= 60 
                         ? 'Good groundwork is present, but lacking key target skills terminology and action verbs to stand out.'
                         : 'Your resume runs a high risk of being discarded by ATS parsers. Apply the key adjustments listed below.'
                     }
@@ -370,15 +374,15 @@ function ResumeScanner({ setActiveTab }) {
                   <div className="stats-row">
                     <div className="stat-pill">
                       <span className="stat-label">Words</span>
-                      <span className="stat-val">{result.wordCount}</span>
+                      <span className="stat-val">{scanResult.wordCount}</span>
                     </div>
                     <div className="stat-pill">
                       <span className="stat-label">Metrics</span>
-                      <span className="stat-val">{result.hasMetrics ? 'Present' : 'None'}</span>
+                      <span className="stat-val">{scanResult.hasMetrics ? 'Present' : 'None'}</span>
                     </div>
                     <div className="stat-pill">
                       <span className="stat-label">Keywords</span>
-                      <span className="stat-val">{result.matchedKeywords.length}/{JOB_CATEGORIES[selectedCategory].keywords.length}</span>
+                      <span className="stat-val">{scanResult.matchedKeywords.length}/{JOB_CATEGORIES[selectedCategory].keywords.length}</span>
                     </div>
                   </div>
                 </div>
@@ -390,7 +394,7 @@ function ResumeScanner({ setActiveTab }) {
                   <div key={item.key} className="breakdown-item">
                     <div className="breakdown-labels">
                       <span className="b-label">{item.label}</span>
-                      <span className="b-val">{result.breakdown[item.key]}%</span>
+                      <span className="b-val">{scanResult.breakdown[item.key]}%</span>
                     </div>
                     <div className="progress-track">
                       <div 
@@ -409,13 +413,13 @@ function ResumeScanner({ setActiveTab }) {
                   className={`tab-btn ${activeResultsTab === 'issues' ? 'active' : ''}`}
                   onClick={() => setActiveResultsTab('issues')}
                 >
-                  Issues & Fixes ({result.issues.length})
+                  Issues & Fixes ({scanResult.issues.length})
                 </button>
                 <button 
                   className={`tab-btn ${activeResultsTab === 'keywords' ? 'active' : ''}`}
                   onClick={() => setActiveResultsTab('keywords')}
                 >
-                  Keyword Check ({result.matchedKeywords.length})
+                  Keyword Check ({scanResult.matchedKeywords.length})
                 </button>
                 <button 
                   className={`tab-btn ${activeResultsTab === 'fixes' ? 'active' : ''}`}
@@ -429,7 +433,7 @@ function ResumeScanner({ setActiveTab }) {
               <div className="tab-contents">
                 {activeResultsTab === 'issues' && (
                   <div className="issues-list animate-fade">
-                    {result.issues.map((issue, idx) => (
+                    {scanResult.issues.map((issue, idx) => (
                       <div key={idx} className={`issue-card ${issue.type}`}>
                         {issue.type === 'error' && <XCircle className="issue-icon icon-error" size={18} />}
                         {issue.type === 'warning' && <AlertTriangle className="issue-icon icon-warning" size={18} />}
@@ -447,12 +451,12 @@ function ResumeScanner({ setActiveTab }) {
                     </div>
 
                     <div className="kw-section">
-                      <h4 className="kw-header matched"><Check size={14} /> Matched ({result.matchedKeywords.length})</h4>
+                      <h4 className="kw-header matched"><Check size={14} /> Matched ({scanResult.matchedKeywords.length})</h4>
                       <div className="chip-container">
-                        {result.matchedKeywords.length === 0 ? (
-                          <span className="no-chip-text">No keywords matched yet. Add details under your skills/experience.</span>
+                        {scanResult.matchedKeywords.length === 0 ? (
+                           <span className="no-chip-text">No keywords matched yet. Add details under your skills/experience.</span>
                         ) : (
-                          result.matchedKeywords.map(kw => (
+                          scanResult.matchedKeywords.map(kw => (
                             <span key={kw} className="kw-chip match">{kw}</span>
                           ))
                         )}
@@ -460,12 +464,12 @@ function ResumeScanner({ setActiveTab }) {
                     </div>
 
                     <div className="kw-section mt-16">
-                      <h4 className="kw-header missing"><Info size={14} /> Missing ({result.missingKeywords.length})</h4>
+                      <h4 className="kw-header missing"><Info size={14} /> Missing ({scanResult.missingKeywords.length})</h4>
                       <div className="chip-container">
-                        {result.missingKeywords.length === 0 ? (
+                        {scanResult.missingKeywords.length === 0 ? (
                           <span className="no-chip-text">Excellent! You covered all key metrics keywords.</span>
                         ) : (
-                          result.missingKeywords.map(kw => (
+                          scanResult.missingKeywords.map(kw => (
                             <span key={kw} className="kw-chip miss">{kw}</span>
                           ))
                         )}
@@ -476,13 +480,13 @@ function ResumeScanner({ setActiveTab }) {
 
                 {activeResultsTab === 'fixes' && (
                   <div className="suggestions-list animate-fade">
-                    {result.suggestions.length === 0 ? (
+                    {scanResult.suggestions.length === 0 ? (
                       <div className="empty-suggestions">
                         <CheckCircle2 size={36} style={{ color: 'var(--primary)' }} />
                         <p>No immediate suggestions! Your resume follows optimal structure guidelines.</p>
                       </div>
                     ) : (
-                      result.suggestions.map((sug, idx) => (
+                      scanResult.suggestions.map((sug, idx) => (
                         <div key={idx} className="suggestion-card">
                           <ChevronRight size={18} className="sug-bullet" />
                           <p className="sug-text">{sug}</p>
