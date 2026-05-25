@@ -200,7 +200,7 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
       bodyData.append('engine', 'pdflatex');
       bodyData.append('return', 'pdf');
 
-      const response = await fetch('https://texlive.net/cgi-bin/latexcgi', {
+      const response = await fetch('https://corsproxy.io/?url=https://texlive.net/cgi-bin/latexcgi', {
         method: 'POST',
         body: bodyData
       });
