@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { jsPDF } from 'jspdf';
 import { gsap } from 'gsap';
 import { 
   Sparkles, Code, FileText, Download, Copy, ExternalLink, 
@@ -187,49 +188,254 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
     document.body.removeChild(element);
   };
 
-  // Compile LaTeX to PDF using free public serverless endpoint
-  const handleCompilePDF = async () => {
+  // Generate a formatted resume PDF client-side using jsPDF
+  const handleCompilePDF = () => {
     setIsCompiling(true);
     setCompileError('');
     try {
-      const bodyData = new FormData();
-      // Ensure CRLF endings to improve texlive.net stability
-      const cleanLatex = latexCode.replace(/\r?\n/g, '\r\n');
-      bodyData.append('filecontents[]', cleanLatex);
-      bodyData.append('filename[]', 'document.tex');
-      bodyData.append('engine', 'pdflatex');
-      bodyData.append('return', 'pdf');
+      const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+      const PAGE_W = doc.internal.pageSize.getWidth();
+      const PAGE_H = doc.internal.pageSize.getHeight();
+      const MARGIN = 48;
+      const CONTENT_W = PAGE_W - MARGIN * 2;
+      let y = MARGIN;
 
-      const response = await fetch('https://corsproxy.io/?url=https://texlive.net/cgi-bin/latexcgi', {
-        method: 'POST',
-        body: bodyData
-      });
-
-      if (!response.ok) {
-        throw new Error('Compilation server returned status ' + response.status + '.');
-      }
-
-      const blob = await response.blob();
-      
-      // Check if response is actually a log file instead of PDF (e.g. contains compilation error text)
-      if (blob.type === 'text/html' || blob.type === 'text/plain') {
-        const textLog = await blob.text();
-        if (textLog.includes('Compilation failed') || textLog.includes('error') || textLog.includes('!')) {
-          throw new Error('LaTeX compilation failed. Please check your document syntax.');
+      const checkPage = (needed = 18) => {
+        if (y + needed > PAGE_H - MARGIN) {
+          doc.addPage();
+          y = MARGIN;
         }
+      };
+
+      const { personalInfo, summary, experience, education, skills, projects } = formData;
+      const name = personalInfo.name || 'Resume';
+
+      // ── Name Header ──────────────────────────────────────────
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(26);
+      doc.setTextColor(15, 15, 25);
+      doc.text(name, PAGE_W / 2, y, { align: 'center' });
+      y += 28;
+
+      // Contact line
+      const contactParts = [
+        personalInfo.email,
+        personalInfo.phone,
+        personalInfo.location,
+        personalInfo.linkedin,
+        personalInfo.github
+      ].filter(Boolean);
+      if (contactParts.length > 0) {
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.setTextColor(80, 80, 100);
+        const contactLine = contactParts.join('  |  ');
+        const lines = doc.splitTextToSize(contactLine, CONTENT_W);
+        doc.text(lines, PAGE_W / 2, y, { align: 'center' });
+        y += lines.length * 12 + 4;
       }
 
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${formData.personalInfo.name ? formData.personalInfo.name.replace(/\s+/g, '_') : 'resume'}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      // Divider
+      doc.setDrawColor(168, 85, 247);
+      doc.setLineWidth(1.2);
+      doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+      y += 14;
+
+      const sectionHeader = (title) => {
+        checkPage(30);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(100, 40, 200);
+        doc.text(title.toUpperCase(), MARGIN, y);
+        y += 3;
+        doc.setDrawColor(200, 180, 240);
+        doc.setLineWidth(0.5);
+        doc.line(MARGIN, y, PAGE_W - MARGIN, y);
+        y += 10;
+        doc.setTextColor(20, 20, 30);
+      };
+
+      const bodyText = (text, indent = 0, fontSize = 10) => {
+        if (!text) return;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(fontSize);
+        doc.setTextColor(40, 40, 55);
+        const lines = doc.splitTextToSize(text, CONTENT_W - indent);
+        lines.forEach(line => {
+          checkPage(14);
+          doc.text(line, MARGIN + indent, y);
+          y += 13;
+        });
+      };
+
+      const boldText = (text, indent = 0, fontSize = 10) => {
+        if (!text) return;
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(fontSize);
+        doc.setTextColor(15, 15, 25);
+        checkPage(14);
+        doc.text(text, MARGIN + indent, y);
+        y += 13;
+      };
+
+      // ── Summary ──────────────────────────────────────────────
+      if (summary) {
+        sectionHeader('Professional Summary');
+        bodyText(summary);
+        y += 6;
+      }
+
+      // ── Experience ───────────────────────────────────────────
+      const validExp = experience.filter(e => e.role || e.company);
+      if (validExp.length > 0) {
+        sectionHeader('Work Experience');
+        validExp.forEach(exp => {
+          checkPage(32);
+          // Row 1: Role | Duration
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10.5);
+          doc.setTextColor(15, 15, 25);
+          const roleLabel = [exp.role, exp.company].filter(Boolean).join(' — ');
+          doc.text(roleLabel, MARGIN, y);
+          if (exp.duration) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 120);
+            doc.text(exp.duration, PAGE_W - MARGIN, y, { align: 'right' });
+          }
+          y += 13;
+          // Row 2: Location (italic)
+          if (exp.location) {
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 130);
+            doc.text(exp.location, MARGIN, y);
+            y += 11;
+          }
+          // Bullets
+          if (exp.bullets) {
+            const bulletLines = exp.bullets.split('\n').map(b => b.trim()).filter(b => b.length > 0);
+            bulletLines.forEach(bullet => {
+              const stripped = bullet.replace(/^[-•*]\s*/, '');
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(9.5);
+              doc.setTextColor(40, 40, 55);
+              const bLines = doc.splitTextToSize('• ' + stripped, CONTENT_W - 14);
+              bLines.forEach((bl, i) => {
+                checkPage(13);
+                doc.text(bl, MARGIN + (i === 0 ? 0 : 10), y);
+                y += 12;
+              });
+            });
+          }
+          y += 6;
+        });
+      }
+
+      // ── Skills ───────────────────────────────────────────────
+      const validSkills = skills.filter(s => s.list);
+      if (validSkills.length > 0) {
+        sectionHeader('Technical Skills');
+        validSkills.forEach(sk => {
+          checkPage(14);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(9.5);
+          doc.setTextColor(60, 60, 80);
+          const catLabel = sk.category ? sk.category + ': ' : '';
+          doc.setFont('helvetica', 'bold');
+          doc.text(catLabel, MARGIN, y);
+          const catW = doc.getTextWidth(catLabel);
+          doc.setFont('helvetica', 'normal');
+          doc.setTextColor(40, 40, 55);
+          const skillLines = doc.splitTextToSize(sk.list, CONTENT_W - catW);
+          doc.text(skillLines[0] || '', MARGIN + catW, y);
+          y += 13;
+          skillLines.slice(1).forEach(line => {
+            checkPage(13);
+            doc.text(line, MARGIN + catW, y);
+            y += 12;
+          });
+        });
+        y += 4;
+      }
+
+      // ── Projects ─────────────────────────────────────────────
+      const validProj = projects.filter(p => p.name);
+      if (validProj.length > 0) {
+        sectionHeader('Projects');
+        validProj.forEach(proj => {
+          checkPage(28);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10.5);
+          doc.setTextColor(15, 15, 25);
+          doc.text(proj.name || '', MARGIN, y);
+          if (proj.date) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 120);
+            doc.text(proj.date, PAGE_W - MARGIN, y, { align: 'right' });
+          }
+          y += 13;
+          if (proj.technologies) {
+            doc.setFont('helvetica', 'italic');
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 130);
+            doc.text('Tech: ' + proj.technologies, MARGIN, y);
+            y += 11;
+          }
+          if (proj.bullets) {
+            const bulletLines = proj.bullets.split('\n').map(b => b.trim()).filter(b => b.length > 0);
+            bulletLines.forEach(bullet => {
+              const stripped = bullet.replace(/^[-•*]\s*/, '');
+              doc.setFont('helvetica', 'normal');
+              doc.setFontSize(9.5);
+              doc.setTextColor(40, 40, 55);
+              const bLines = doc.splitTextToSize('• ' + stripped, CONTENT_W - 14);
+              bLines.forEach((bl, i) => {
+                checkPage(13);
+                doc.text(bl, MARGIN + (i === 0 ? 0 : 10), y);
+                y += 12;
+              });
+            });
+          }
+          y += 6;
+        });
+      }
+
+      // ── Education ────────────────────────────────────────────
+      const validEdu = education.filter(e => e.institution || e.degree);
+      if (validEdu.length > 0) {
+        sectionHeader('Education');
+        validEdu.forEach(edu => {
+          checkPage(28);
+          doc.setFont('helvetica', 'bold');
+          doc.setFontSize(10.5);
+          doc.setTextColor(15, 15, 25);
+          doc.text(edu.institution || '', MARGIN, y);
+          if (edu.year) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9);
+            doc.setTextColor(100, 100, 120);
+            doc.text(edu.year, PAGE_W - MARGIN, y, { align: 'right' });
+          }
+          y += 13;
+          if (edu.degree) {
+            doc.setFont('helvetica', 'normal');
+            doc.setFontSize(9.5);
+            doc.setTextColor(50, 50, 70);
+            doc.text(edu.degree + (edu.gpa ? `  |  GPA: ${edu.gpa}` : ''), MARGIN, y);
+            y += 12;
+          }
+          y += 4;
+        });
+      }
+
+      // Save
+      const filename = name.replace(/\s+/g, '_') || 'resume';
+      doc.save(`${filename}.pdf`);
     } catch (err) {
       console.error(err);
-      setCompileError(err.message || 'An error occurred during LaTeX compilation.');
+      setCompileError('PDF generation failed: ' + (err.message || 'Unknown error.'));
     } finally {
       setIsCompiling(false);
     }
@@ -717,16 +923,16 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
                 className={`btn-action-text compile-btn ${isCompiling ? 'loading' : ''}`} 
                 onClick={handleCompilePDF}
                 disabled={isCompiling}
-                title="Compile LaTeX code directly into a PDF using texlive.net API"
+                title="Generate a formatted PDF resume from your form data (client-side, no server needed)"
               >
                 {isCompiling ? (
                   <>
                     <div className="spinner-sm"></div>
-                    Compiling...
+                    Generating...
                   </>
                 ) : (
                   <>
-                    Compile PDF <Sparkles size={14} />
+                    Download PDF <Sparkles size={14} />
                   </>
                 )}
               </button>
