@@ -3,7 +3,7 @@ import { gsap } from 'gsap';
 import { 
   Sparkles, Code, FileText, Download, Copy, ExternalLink, 
   Plus, Trash2, ChevronDown, ChevronUp, Check, RotateCcw,
-  User, Mail, Phone, MapPin, Briefcase, GraduationCap, Wrench
+  User, Mail, Phone, MapPin, Briefcase, GraduationCap, Wrench, XCircle
 } from 'lucide-react';
 
 const Linkedin = (props) => (
@@ -82,6 +82,8 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
   const [copied, setCopied] = useState(false);
   const [latexCode, setLatexCode] = useState('');
   const [activeTabPanel, setActiveTabPanel] = useState('code'); // 'code' or 'about'
+  const [isCompiling, setIsCompiling] = useState(false);
+  const [compileError, setCompileError] = useState('');
 
   // Refs for animations
   const builderContainerRef = useRef(null);
@@ -183,6 +185,54 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
     document.body.appendChild(element);
     element.click();
     document.body.removeChild(element);
+  };
+
+  // Compile LaTeX to PDF using free public serverless endpoint
+  const handleCompilePDF = async () => {
+    setIsCompiling(true);
+    setCompileError('');
+    try {
+      const bodyData = new FormData();
+      // Ensure CRLF endings to improve texlive.net stability
+      const cleanLatex = latexCode.replace(/\r?\n/g, '\r\n');
+      bodyData.append('filecontents[]', cleanLatex);
+      bodyData.append('filename[]', 'document.tex');
+      bodyData.append('engine', 'pdflatex');
+      bodyData.append('return', 'pdf');
+
+      const response = await fetch('https://texlive.net/cgi-bin/latexcgi', {
+        method: 'POST',
+        body: bodyData
+      });
+
+      if (!response.ok) {
+        throw new Error('Compilation server returned status ' + response.status + '.');
+      }
+
+      const blob = await response.blob();
+      
+      // Check if response is actually a log file instead of PDF (e.g. contains compilation error text)
+      if (blob.type === 'text/html' || blob.type === 'text/plain') {
+        const textLog = await blob.text();
+        if (textLog.includes('Compilation failed') || textLog.includes('error') || textLog.includes('!')) {
+          throw new Error('LaTeX compilation failed. Please check your document syntax.');
+        }
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${formData.personalInfo.name ? formData.personalInfo.name.replace(/\s+/g, '_') : 'resume'}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      setCompileError(err.message || 'An error occurred during LaTeX compilation.');
+    } finally {
+      setIsCompiling(false);
+    }
   };
 
   // Form submission directly to Overleaf deep-link
@@ -663,6 +713,23 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
             </div>
             
             <div className="panel-actions">
+              <button 
+                className={`btn-action-text compile-btn ${isCompiling ? 'loading' : ''}`} 
+                onClick={handleCompilePDF}
+                disabled={isCompiling}
+                title="Compile LaTeX code directly into a PDF using texlive.net API"
+              >
+                {isCompiling ? (
+                  <>
+                    <div className="spinner-sm"></div>
+                    Compiling...
+                  </>
+                ) : (
+                  <>
+                    Compile PDF <Sparkles size={14} />
+                  </>
+                )}
+              </button>
               <button className="btn-action-icon" onClick={handleDownload} title="Download .tex File">
                 <Download size={16} />
               </button>
@@ -676,6 +743,12 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
           </div>
 
           <div className="code-panel-body">
+            {compileError && (
+              <div className="compile-error-banner">
+                <XCircle size={16} style={{ flexShrink: 0 }} />
+                <span>{compileError}</span>
+              </div>
+            )}
             {activeTabPanel === 'code' ? (
               <div className="code-viewer-container">
                 <div className="sync-pulse">
@@ -1162,6 +1235,51 @@ function LaTeXBuilder({ scanResult, selectedCategory, setActiveTab }) {
           gap: 12px;
           overflow: hidden;
           height: 100%;
+        }
+
+        .compile-btn {
+          background: linear-gradient(135deg, var(--accent) 0%, #7c3aed 100%) !important;
+          border: 1px solid rgba(168, 85, 247, 0.4) !important;
+          box-shadow: 0 0 12px rgba(168, 85, 247, 0.25) !important;
+        }
+
+        .compile-btn:hover:not(:disabled) {
+          box-shadow: 0 0 16px rgba(168, 85, 247, 0.5) !important;
+          transform: translateY(-1px);
+        }
+
+        .compile-btn:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+          transform: none !important;
+        }
+
+        .compile-error-banner {
+          background: rgba(239, 68, 68, 0.08);
+          border: 1px solid rgba(239, 68, 68, 0.25);
+          color: #fca5a5;
+          padding: 10px 14px;
+          border-radius: 8px;
+          margin-bottom: 12px;
+          font-size: 13px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          line-height: 1.4;
+        }
+
+        .spinner-sm {
+          width: 14px;
+          height: 14px;
+          border: 2px solid rgba(255, 255, 255, 0.2);
+          border-top: 2px solid white;
+          border-radius: 50%;
+          animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
         }
 
         .sync-pulse {
